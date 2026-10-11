@@ -258,7 +258,7 @@ await gridManager.formatting.setRules(rules);
 | `restoreSnapshot(snapshot)` | `snapshots.restore(snapshot)` |
 | `gridSheetTableKey` | `gridKey` |
 
-`reload()`, `notifyListeners()` and `cleanup()` are unchanged.
+`reload()` and `notifyListeners()` are unchanged. `cleanup()` is removed: the grid releases its resources when it's disposed, so delete any `gridManager.cleanup()` call.
 
 ---
 
@@ -317,6 +317,31 @@ What to check:
 - Workarounds for the old behavior can go: a new `Key` to force a rebuild, or `rowsLoader` + `reload()` used only to show new data.
 - With `serverSidePagination` or `infiniteScroll`, rows still come from `onPageChange`; a changed `rows` is ignored.
 
+### Custom evaluators implement `GridSheetEvaluator`
+
+`GridSheet.evaluator` and `GridSheetCellContext.evaluator` are now a `GridSheetEvaluator`, which takes the expression as a string, instead of the `expressions` package's `ExpressionEvaluator`. You no longer need to depend on `expressions` yourself.
+
+```dart
+// 2.2.3
+class MyEvaluator extends ExpressionEvaluator {
+  @override
+  dynamic eval(Expression expression, Map<String, dynamic> context) { ... }
+}
+
+// Now
+class MyEvaluator implements GridSheetEvaluator {
+  static const _default = GridSheetExpressionEvaluator();
+
+  @override
+  dynamic evaluate(String expression, Map<String, dynamic> context) {
+    // Handle what you need, and delegate the rest:
+    return _default.evaluate(expression, context);
+  }
+}
+```
+
+`GridSheetExpressionEvaluator` is still the default, with the same null handling, but no longer extends `ExpressionEvaluator`. To keep customizing the `expressions` package's evaluator itself, depend on `expressions`, subclass `ExpressionEvaluator` as before, and call it from your `evaluate`.
+
 ---
 
 ## Configuration, models and enums
@@ -330,8 +355,13 @@ What to check:
 | `GridSheetConstants.filterBlanksText` / `filterNoBlanksText` | `GridSheetConstants.blanksText` / `noBlanksText` |
 | `GridSheetStyleConfiguration.ascSortIconColor` / `descSortIconColor` | `ascendingSortIconColor` / `descendingSortIconColor` |
 | `GridSheetStyleConfiguration.footerRowBorderColor` | `bottomBarBorderColor` |
-| `GridSheetFormConfiguration.mode` | `viewMode` |
+| `GridSheetFormConfiguration.mode` | `GridSheet.viewMode` (`auto` → `responsive`; the new `auto` shows the table, or the pivot when one is configured) |
 | `GridSheetFormConfiguration.headerBuilder: (row) => ...` / `footerBuilder` | `topBarBuilder: (context, row, gridManager) => ...` / `bottomBarBuilder` |
+| `GridSheetColumn(type: GridSheetColumnType.text)` (an enum value) | `GridSheetColumn(type: const GridSheetColumnType.text())`, a constructor per kind: `boolean()`, `datetime()`, `double()`, `integer()`, `text()`, `formula()`, `dropdown(options: ...)`, `custom()` |
+| `column.type == GridSheetColumnType.formula` / `switch (column.type)` | `column.type.kind == GridSheetColumnKind.formula` / `switch (column.type.kind)` (`==` on the type also compares its settings) |
+| `GridSheetColumnType.values` / `type.name` | `GridSheetColumnKind.values` / `type.kind.name` |
+| `GridSheetColumn(type: GridSheetColumnType.dropdown, dropdownOptions: [...])` / `copyWith(dropdownOptions: ...)` | `GridSheetColumn(type: const GridSheetColumnType.dropdown(options: [...]))` / `copyWith(type: ...)`; `column.dropdownOptions` stays as a read-only getter |
+| `GridSheetColumn(showFormulaInEdit: false)` / `column.showFormulaInEdit` | `GridSheetColumn(type: const GridSheetColumnType.formula(showFormulaOnFocus: false))` / `column.showFormulaOnFocus` (read-only; `false` for non-formula columns) |
 | `GridSheetColumn.resize` | `resizable` |
 | `GridSheetColumn(noTextControllerWidget: true)` | `GridSheetColumn(hasTextController: false)`: the meaning is inverted; the default is `true` |
 | `GridSheetRow(originalData: ...)` / `row.copyWith(originalData: ...)` / `row.originalData = ...` | removed: pass `data`; the grid sets `originalData` (now read-only) on the first edit |
@@ -348,6 +378,8 @@ What to check:
 | `GridSheetRowInsertPosition.aboveSelection` / `.belowSelection` | `.above` / `.below` |
 | `GridSheetColumnInsertPosition.beforeSelection` / `.afterSelection` | `.before` / `.after` |
 | `IGridSheetCustomCellWidgetBuilder` | `IGridSheetCustomCellBuilder` (same methods) |
+| `GridSheetCustomCellWidgetBuilder` typedef (the type of `GridSheet.cellBuilder`) | `GridSheetCellBuilder` (same signature) |
+| `GridSheetState.refresh()` | removed (grid internals); use `notifyListeners()` to rebuild the grid after state it reads changed outside of it |
 | `CellValueChanged` typedef | removed (the grid never called it); declare your own callback type |
 | `GridSheetCellWidgetType` enum | removed (unused); use `GridSheetColumnType` or your own enum |
 | `GridSheetSortKey` class | removed (unused); the active sort is `sorting.keys` (`List<GridSheetSortState>`) |
@@ -414,6 +446,7 @@ These compile unchanged but behave differently:
 
 - **Cell text no longer wraps by default.** `GridSheetColumn.wrap` defaults to `false`: read-only cells truncate with an ellipsis and editable cells stay single-line. Set `wrap: true`, or call `columns.setWrap(keys, true)`, where you relied on wrapping.
 - **`GridSheetFormConfiguration.formBuilder`** replaces only the form card's content, not the whole card.
+- **Un-migrated column type comparisons compile but never match.** `column.type == GridSheetColumnType.text` (without `()`) now compares against a constructor tear-off and is always `false`. Compare kinds instead: `column.type.kind == GridSheetColumnKind.text`.
 - **`columns.insert`/`columns.duplicate`** always insert into the scrollable section; a pinned column selection is treated as no selection. Use `columns.insertAt`/`columns.duplicateAt` with `band:` to target a pinned pane.
 - **The row-expansion panel** spans every column (pinned and scrollable) instead of only the scrollable ones.
 - **`cells.pasteFromClipboard`** converts each value by column type, like typed input: pasting `99` into an integer column stores `99`, not `"99"`, and a blank value stores `null` instead of `''`.
