@@ -12,7 +12,7 @@ This is a major release with a long list of API changes. That's deliberate. As G
 
 We know upgrading takes time, and we've tried to make it as quick as possible. Almost every change is a compile-time error, so the analyzer points you to each place that needs updating, and every 2.2.3 API below is listed next to its replacement. Most projects can upgrade by working through the analyzer errors with this guide open.
 
-If something isn't covered here, or a change doesn't fit how you use GridSheet, please tell us on the [issue tracker](https://github.com/prdct-builder/grid_sheet_issues). Your feedback shapes the next release.
+If something isn't covered here, or a change doesn't fit how you use GridSheet, please tell us on the [issue tracker](https://github.com/prdct-builder/grid_sheet_demo/issues). Your feedback shapes the next release.
 
 ## What changed
 
@@ -130,7 +130,7 @@ The 2.2.3 `GridSheetManagerHelpers` extension is removed; its members are listed
 | `findCells(predicate:, columnNames:)` | `cells.find(predicate:, columnKeys:)` |
 | `findAndReplace(..., columnNames:)` | `cells.findAndReplace(..., columnKeys:)` |
 | `autofillVerticalCells(...)` / `autofillHorizontalCells(...)` | `cells.autoFillVertical(...)` / `cells.autoFillHorizontal(...)` |
-| `copyCellsToClipboard(...)` / `pasteCellsFromClipboard(...)` | `cells.copyToClipboard(...)` / `cells.pasteFromClipboard(...)` |
+| `copyCellsToClipboard(...)` / `pasteCellsFromClipboard(...)` | `cells.selectedText(...)` (or `cells.copy(...)` to also write the system clipboard) / `cells.pasteText(text: ...)` (or `cells.paste(...)` to read the system clipboard) |
 | `validateAllCells(...)` | `cells.validateAll(...)` |
 | `scrollToCell(...)` | `cells.scrollTo(...)` |
 | `getCellController(...)` / `getCellFocusNode(...)` | `cells.controller(...)` / `cells.focusNode(...)` |
@@ -151,7 +151,27 @@ The 2.2.3 `GridSheetManagerHelpers` extension is removed; its members are listed
 | `getSelectedColumnsNames(columns)` | `selection.columnNames` |
 | `getSelectedCellsData(cells)` | `selection.cellsData` |
 
-The selection events (`GridSheetRowsSelectedEvent`, `GridSheetColumnsSelectedEvent`, `GridSheetCellsSelectedEvent`) are unchanged.
+### Event properties
+
+Event properties drop the prefix the event type already implies (`selected`, `deleted`, `Row`/`Column`).
+
+| 2.2.3 | Now |
+|---|---|
+| `GridSheetRowsSelectedEvent.selectedRows` / `.selectedRowKeys` / `.selectedRowsData` | `.rows` / `.keys` / `.data` |
+| `GridSheetColumnsSelectedEvent.selectedColumns` / `.selectedColumnKeys` / `.selectedColumnNames` / `.selectedColumnsData` | `.columns` / `.keys` / `.names` / `.data` |
+| `GridSheetCellsSelectedEvent.selectedCells` / `.selectedCellsData` | `.cells` / `.data` |
+| `GridSheetColumnReorderEvent.fromColumnKey` / `.toColumnKey` | `.fromKey` / `.toKey` |
+| `GridSheetRowReorderEvent.fromRowKey` / `.toRowKey` | `.fromKey` / `.toKey` |
+| `GridSheetUndoDeleteEvent.deletedRows` / `.deletedColumns` / `.deletedRowKeys` / `.deletedColumnKeys` | `.rows` / `.columns` / `.rowKeys` / `.columnKeys` |
+| `GridSheetRowSwipeEvent.rowKey` | `.key` |
+
+```dart
+// 2.2.3
+onRowsSelected: (event) => save(event.selectedRowKeys),
+
+// Now
+onRowsSelected: (event) => save(event.keys),
+```
 
 ### Filters and search — `gridManager.filters`, `gridManager.search`
 
@@ -220,8 +240,8 @@ await gridManager.formatting.setRules(rules);
 |---|---|
 | `rowsDataToMapList(rows)` | `data.toMaps(rows)` |
 | `getRowValuesByKey(key)` | `data.toMap(key)` |
-| `getAllRowsInOrder()` | `data.toLists(rowScope: GridSheetRowScope.all)` |
-| `getCurrentRowsInOrder()` / `getCurrentRowsInOrder(ignorePagination: false)` | `data.toLists()` / `data.toLists(rowScope: GridSheetRowScope.currentPage)` |
+| `getAllRowsInOrder()` | `data.toLists(columnScope: GridSheetColumnScope.all, rowScope: GridSheetRowScope.all)` |
+| `getCurrentRowsInOrder()` / `getCurrentRowsInOrder(ignorePagination: false)` | `data.toLists(columnScope: GridSheetColumnScope.all)` / `data.toLists(columnScope: GridSheetColumnScope.all, rowScope: GridSheetRowScope.currentPage)` |
 | `getVisibleColumnsAllRowsAsLists()` | `data.toLists(columnScope: GridSheetColumnScope.visible, rowScope: GridSheetRowScope.all)` |
 | `getVisibleColumnsCurrentRowsAsLists()` | `data.toLists(columnScope: GridSheetColumnScope.visible)` |
 | `exportToCSV(onlyVisibleColumns:, onlyFilteredRows:, onlyCurrentPageRows:)` | `data.toCsv(columnScope:, rowScope:)` |
@@ -356,7 +376,7 @@ class MyEvaluator implements GridSheetEvaluator {
 | `GridSheetStyleConfiguration.ascSortIconColor` / `descSortIconColor` | `ascendingSortIconColor` / `descendingSortIconColor` |
 | `GridSheetStyleConfiguration.footerRowBorderColor` | `bottomBarBorderColor` |
 | `GridSheetFormConfiguration.mode` | `GridSheet.viewMode` (`auto` → `responsive`; the new `auto` shows the table, or the pivot when one is configured) |
-| `GridSheetFormConfiguration.headerBuilder: (row) => ...` / `footerBuilder` | `topBarBuilder: (context, row, gridManager) => ...` / `bottomBarBuilder` |
+| `GridSheetFormConfiguration.headerBuilder: (row) => ...` / `footerBuilder` | `topBarBuilder: (context, row, gridManager) => ...` / `bottomBarBuilder`. Their type, `GridSheetFormRecordBuilder`, changed from `Widget Function(GridSheetRow row)` to `Widget Function(BuildContext context, GridSheetRow row, GridSheetManager gridManager)`. |
 | `GridSheetColumn(type: GridSheetColumnType.text)` (an enum value) | `GridSheetColumn(type: const GridSheetColumnType.text())`, a constructor per kind: `boolean()`, `datetime()`, `double()`, `integer()`, `text()`, `formula()`, `dropdown(options: ...)`, `custom()` |
 | `column.type == GridSheetColumnType.formula` / `switch (column.type)` | `column.type.kind == GridSheetColumnKind.formula` / `switch (column.type.kind)` (`==` on the type also compares its settings) |
 | `GridSheetColumnType.values` / `type.name` | `GridSheetColumnKind.values` / `type.kind.name` |
@@ -431,7 +451,7 @@ A manager call now does nothing when the matching `GridSheetConfiguration` flag 
 
 | API | Needs |
 |---|---|
-| `selection.selectRows` / `selectColumns` / `selectCells` with several keys | `enableMultiSelection: true` (otherwise only the last key is selected, like a tap) |
+| `selection.selectRows` / `selectColumns` / `selectCells` | `enableMultiSelection: true` to add to the selection. Without it, each call replaces the whole selection (rows, columns and cells) with its last key, like a tap; in 2.2.3 the keys were added to what was selected. |
 | `rows.setHeights` / `resetHeights` / `autoFitHeights` | `enableRowResize: true` |
 | `columns.setWidths` / `resetWidths` / `autoFitWidths` | `resizable: true` on each column you resize |
 | `cells.autoFillVertical` / `autoFillHorizontal` | `GridSheetAutoFillConfiguration(enabled: true)`; its `enablePatternDetection` also limits the call's own `enablePatternDetection` |
@@ -449,7 +469,7 @@ These compile unchanged but behave differently:
 - **Un-migrated column type comparisons compile but never match.** `column.type == GridSheetColumnType.text` (without `()`) now compares against a constructor tear-off and is always `false`. Compare kinds instead: `column.type.kind == GridSheetColumnKind.text`.
 - **`columns.insert`/`columns.duplicate`** always insert into the scrollable section; a pinned column selection is treated as no selection. Use `columns.insertAt`/`columns.duplicateAt` with `band:` to target a pinned pane.
 - **The row-expansion panel** spans every column (pinned and scrollable) instead of only the scrollable ones.
-- **`cells.pasteFromClipboard`** converts each value by column type, like typed input: pasting `99` into an integer column stores `99`, not `"99"`, and a blank value stores `null` instead of `''`.
+- **`cells.pasteText`** (formerly `pasteCellsFromClipboard`) converts each value by column type, like typed input: pasting `99` into an integer column stores `99`, not `"99"`, and a blank value stores `null` instead of `''`.
 - **`cells.findAndReplace`** converts a string `replaceValue` by column type the same way.
 - **`GridSheetCellValueChangedEvent.newValue`** is the stored, typed value (like `oldValue`), not its string form: `99`, not `"99"`, in an integer column; `null`, not `''`, for a cleared cell.
 - **`GridSheetDataSource.rowsFromJson` and `GridSheetRow.toParsedDataMap`** keep `List`, `Map` and custom-object values instead of turning them into `null`.
